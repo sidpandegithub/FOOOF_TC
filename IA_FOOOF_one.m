@@ -1,73 +1,35 @@
 addpath('C:\fieldtrip-20240113');
-DIR = 'D:\src\11-reref';
+DIR = 'D:\src\12-reref';
+FILE= '20210506_RARAG_S1_reref.mat';
+filename = fullfile(DIR, FILE);
+load(filename, 'reref');
 
-FILES = {
-    '20210506_RARAG_S1.mat';
-    '20210513_RARAG_S2.mat';
-    '20210527_RARAG_S3.mat'
-};
+data = reref(1); 
 
-oscillatory_data = cell(1, numel(FILES));
+% FOOOF aperiodic component
+cfg               = [];
+cfg.foilim        = [1 30];
+cfg.pad           = 4;
+cfg.tapsmofrq     = 2;
+cfg.method        = 'mtmfft';
+cfg.output        = 'fooof_aperiodic';
+fractal = ft_freqanalysis(cfg, data);
 
-% NEWEST_LABELS  = {'Fp1','Fp2','F3','F4','C3','C4','P3','P4',...
-%     'O1','O2','F7','F8','T7','T8','P7','P8',...
-%     'Fz','Cz','Pz','Iz','FC1','FC2','CP1','CP2',...
-%     'FC5','FC6','CP5','CP6','TP9','TP10','AFz','FCz',...
-%     'F1','F2','C1','C2','P1','P2','AF3','AF4',...
-%     'FC3','FC4','CP3','CP4','PO3','PO4','F5','F6',...
-%     'C5','C6','P5','P6','AF7','AF8','FT7','FT8',...
-%     'TP7','TP8','PO7','PO8','Fpz','CPz','POz','Oz',...
-%     'ECG','HEOG','VEOG','Marker'}';
-% 
-for i = 1:numel(FILES)
-    filename = fullfile(DIR, FILES{i});
-    load(filename, 'reref');
-% 
-%     % Keep only the first 64 EEG channels in the labels
-%     reref(1).label = NEWEST_LABELS(1:64);  
-% 
-    % Loop through each trial and slice out the first 64 channels
-    for j = 1:numel(reref(1).trial)
-        reref(1).trial{j} = reref(1).trial{j}(1:64, :);  
-end
-% 
-    data = reref(1); 
-    
-   
-    % FOOOF aperiodic component
-    cfg               = [];
-    cfg.foilim        = [1 30];
-    cfg.pad           = 4;
-    cfg.tapsmofrq     = 2;
-    cfg.method        = 'mtmfft';
-    cfg.output        = 'fooof_aperiodic';
-    fractal = ft_freqanalysis(cfg, data);
+% Original power
+cfg.output        = 'pow';
+original = ft_freqanalysis(cfg, data);
 
-    % Original power
-    cfg.output        = 'pow';
-    original = ft_freqanalysis(cfg, data);
-
-    % Oscillatory power = Original / Aperiodic
-    cfg               = [];
-    cfg.parameter     = 'powspctrm';
-    cfg.operation     = 'x2./x1';
-    oscillatory = ft_math(cfg, fractal, original);
-
-    oscillatory_data{i} = oscillatory;
-end
-
-
-% Grand average across all sessions
-cfg = [];
-cfg.parameter = 'powspctrm';
-avg_oscillatory = ft_freqgrandaverage(cfg, oscillatory_data{:});
+% Oscillatory power = Original / Aperiodic
+cfg               = [];
+cfg.parameter     = 'powspctrm';
+cfg.operation     = 'x2./x1';
+oscillatory = ft_math(cfg, fractal, original);
 
 % Extract frequency and power
-freq_oscillatory = avg_oscillatory.freq;
-pow  = avg_oscillatory.powspctrm;
+freq_oscillatory = oscillatory.freq;
+pow = oscillatory.powspctrm;
 
 % Plot average spectrum across channels
-% Get frequency and average power across channels
 freq_original = original.freq;
 
 % Mean across channels
@@ -82,12 +44,10 @@ semilogy(freq_original, mean_fractal, 'r--', 'LineWidth', 2);
 semilogy(freq_oscillatory, mean_oscillatory, 'b-', 'LineWidth', 2);
 
 legend({'Original', 'Fractal (Aperiodic)', 'Oscillatory'}, 'Location', 'northeast');
-
 xlabel('Frequency (Hz)');
 ylabel('Power (\muV^2/Hz)');
 title('Power Spectra: Original vs Fractal vs Oscillatory');
 grid on;
-
 
 % Define alpha band
 alpha_band = [7 13];
@@ -115,7 +75,7 @@ for c = 1:nchan
 end
 
 % Get channel names
-chan_labels = avg_oscillatory.label;
+chan_labels = oscillatory.label;
 
 % Find channel(s) with most alpha power
 [~, max_chan_idx] = max(alpha_mean_pow);
@@ -137,10 +97,9 @@ end
 % Plot top 5 alpha channels using semilogy
 figure;
 hold on;
-
 colors = lines(topN);
 for i = 1:topN
-    idx = sorted_idx(i);  % still based on alpha power
+    idx = sorted_idx(i);
     semilogy(freq_oscillatory, pow(idx, :), ...
         'LineWidth', 2, 'Color', colors(i, :));
 end
@@ -152,9 +111,7 @@ legend(chan_labels(sorted_idx(1:topN)), 'Location', 'northeast');
 grid on;
 xticks(1:1:35);
 
-
-
-%% Bar Plot of Mean Alpha Power
+% Bar Plot of Mean Alpha Power
 figure;
 bar(alpha_mean_pow(sorted_idx));
 set(gca, 'XTick', 1:nchan, 'XTickLabel', chan_labels(sorted_idx));
@@ -162,9 +119,8 @@ xtickangle(45);
 ylabel('Mean Alpha Power (7–13 Hz)');
 title('Alpha Power by Channel (Sorted, Post-FOOOF)');
 grid on;
-%% 
 
-%topo structure
+% Topographical plot
 topo_data = [];
 topo_data.label = chan_labels;
 topo_data.dimord = 'chan_time';
@@ -188,6 +144,3 @@ cfg.colormap = parula;
 figure;
 ft_topoplotER(cfg, topo_data);
 title('Topographical Distribution of Mean Alpha Power (7–13 Hz)');
-
-
-%% 
