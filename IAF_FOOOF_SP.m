@@ -27,9 +27,9 @@ for i = 1:numel(FILES)
 %     reref(1).label = NEWEST_LABELS(1:64);  
 % 
     % Loop through each trial and slice out the first 64 channels
-    for j = 1:numel(reref(1).trial)
-        reref(1).trial{j} = reref(1).trial{j}(1:64, :);  
-end
+ for j = 1:numel(data(1).trial)
+        data(1).trial{j} = data(1).trial{j}(1:64, :);  
+ end
 % 
     data = reref(1); 
     
