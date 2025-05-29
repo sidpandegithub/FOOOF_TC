@@ -164,7 +164,7 @@ title('Alpha Power by Channel (Sorted, Post-FOOOF)');
 grid on;
 %% 
 
-%topo structure
+% Build data structure for topoplot
 topo_data = [];
 topo_data.label = chan_labels;
 topo_data.dimord = 'chan_time';
@@ -182,8 +182,8 @@ cfg.layout = layout;
 cfg.marker = 'on';
 cfg.comment = 'no';
 cfg.colorbar = 'yes';
-cfg.zlim = 'maxabs';  
-cfg.colormap = parula;
+cfg.zlim = [0 max(abs(topo_data.avg(:)))] ;  
+cfg.colormap = jet;
 
 figure;
 ft_topoplotER(cfg, topo_data);
