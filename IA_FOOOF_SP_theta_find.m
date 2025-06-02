@@ -1,25 +1,16 @@
 clear all;
-addpath('C:\fieldtrip-20240113');
+addpath('C:\fieldtrip-20250106');
+% addpath('C:\fieldtrip-20240113');
 DIR = 'D:\src\11-reref';
 
 FILES = {
-    '20190729_ALYEU_S1.mat';
-    '20190731_ALYEU_S2.mat';
-    '20190812_ALYEU_S3.mat'
+    '20190716_LIGOH_S1.mat';
+    '20190719_LIGOH_S2.mat';
+    '20190724_LIGOH_S3.mat'
 };
 
 oscillatory_data = cell(1, numel(FILES));
 
-% NEWEST_LABELS  = {'Fp1','Fp2','F3','F4','C3','C4','P3','P4',...
-%     'O1','O2','F7','F8','T7','T8','P7','P8',...
-%     'Fz','Cz','Pz','Iz','FC1','FC2','CP1','CP2',...
-%     'FC5','FC6','CP5','CP6','TP9','TP10','AFz','FCz',...
-%     'F1','F2','C1','C2','P1','P2','AF3','AF4',...
-%     'FC3','FC4','CP3','CP4','PO3','PO4','F5','F6',...
-%     'C5','C6','P5','P6','AF7','AF8','FT7','FT8',...
-%     'TP7','TP8','PO7','PO8','Fpz','CPz','POz','Oz',...
-%     'ECG','HEOG','VEOG','Marker'}';
-% 
 for i = 1:numel(FILES)
     filename = fullfile(DIR, FILES{i});
     load(filename, 'reref');
@@ -123,6 +114,7 @@ end
 
 
 % Remove the file extension
+image_DIR = 'D:/src/IAF_avgs';
 [~, name, ~] = fileparts(FILES{1});
 parts = split(name, '_');
 core_name = parts{2}; 
@@ -152,8 +144,6 @@ cfg.colormap = jet;
 figure;
 ft_topoplotER(cfg, topo_data);
 title('Topographical Distribution of Mean Alpha Power (7–13 Hz)');
-
-image_DIR = 'D:/src/IAF_avgs';
 exportgraphics(gcf, fullfile(image_DIR, [core_name '_topo.jpg']), 'ContentType', 'vector');
 
 
@@ -168,7 +158,6 @@ xlabel('Frequency (Hz)');
 ylabel('Power (\muV^2/Hz)');
 title('Power Spectra');
 grid on;
-image_DIR = 'D:/src/IAF_avgs';
 exportgraphics(gcf, fullfile(image_DIR, [core_name '_FOOOF_plot.jpg']), 'ContentType', 'vector');
 
 figure;
@@ -185,7 +174,6 @@ title('Top 5 Channels by Alpha Power');
 legend(chan_labels(sorted_idx(1:topN)), 'Location', 'northeast');
 grid on;
 xticks(1:1:35);
-image_DIR = 'D:/src/IAF_avgs';
 exportgraphics(gcf, fullfile(image_DIR, [core_name '_top_channels_plot.jpg']), 'ContentType', 'vector');
 
 figure;
@@ -195,6 +183,110 @@ xtickangle(45);
 ylabel('Mean Alpha Power (7–13 Hz)');
 title('Alpha Power by Channel');
 grid on;
-
-image_DIR = 'D:/src/IAF_avgs';
 exportgraphics(gcf, fullfile(image_DIR, [core_name '_power_bar_plot.jpg']), 'ContentType', 'vector');
+
+
+%% width of alpha 
+
+% Get the power spectrum for the channel with max alpha power
+max_chan_power = pow(max_chan_idx, alpha_idx);
+
+% Get the peak power and frequency
+peak_val = alpha_peak_vals(max_chan_idx);
+peak_freq = alpha_peak_freqs(max_chan_idx);
+
+% Find index of the peak frequency within the alpha band
+[~, peak_idx_within_alpha] = max(max_chan_power);
+
+% Calculate 10% of peak (prominence threshold)
+threshold = 0.10 * peak_val;
+
+% Search to the left of the peak for crossing
+left_idx = peak_idx_within_alpha;
+while left_idx > 1 && max_chan_power(left_idx) > threshold
+    left_idx = left_idx - 1;
+end
+
+% Search to the right of the peak for crossing
+right_idx = peak_idx_within_alpha;
+while right_idx < length(max_chan_power) && max_chan_power(right_idx) > threshold
+    right_idx = right_idx + 1;
+end
+
+% Get frequencies at boundaries
+left_freq = alpha_freqs(left_idx);
+right_freq = alpha_freqs(right_idx);
+
+% Compute width
+bandwidth = right_freq - left_freq;
+
+% Apply 6 Hz max width rule
+if bandwidth > 6
+    bandwidth = 3;  % Apply 3 Hz symmetric width
+    band_low = peak_freq - 1.5;
+    band_high = peak_freq + 1.5;
+else
+    band_low = left_freq;
+    band_high = right_freq;
+end
+
+fprintf('\nDefined alpha peak band around %s: %.2f–%.2f Hz (width = %.2f Hz)\n', ...
+    max_alpha_channel, band_low, band_high, bandwidth);
+
+figure;
+hold on;
+plot(alpha_freqs, max_chan_power, 'b-', 'LineWidth', 2);
+plot(peak_freq, peak_val, 'ro', 'MarkerSize', 8, 'LineWidth', 2);
+y_limits = ylim;
+plot([band_low band_low], y_limits, 'r--', 'LineWidth', 1.5);
+plot([band_high band_high], y_limits, 'r--', 'LineWidth', 1.5);
+
+xlabel('Frequency (Hz)');
+ylabel('Power (\muV^2/Hz)');
+title(sprintf('Alpha Peak Band for Channel %s', max_alpha_channel));
+legend('Power Spectrum', 'Alpha Peak', 'Band Edges');
+grid on;
+hold off;
+
+%% 
+
+
+% Extract the oscillatory power for the selected channel
+chan_power = pow(max_chan_idx, :);
+log_power = log10(chan_power);
+
+% Plot log-power spectrum for that channel
+figure;
+plot(freq_oscillatory, log_power, 'b-', 'LineWidth', 2); hold on;
+yline(0, 'k--', 'LineWidth', 1.5); % log10(1) = 0 reference line
+xlabel('Frequency (Hz)');
+ylabel('Log Power (log_{10}(\muV^2/Hz))');
+title(sprintf('Log Power Spectrum - %s', chan_labels{max_chan_idx}));
+grid on;
+
+% Find where the curve crosses 0 (i.e., log10(1))
+above_thresh = log_power > 0;
+crossings = diff(above_thresh);
+
+% Indexes of rising and falling edges
+start_idx = find(crossings == 1, 1, 'first') + 1;
+end_idx = find(crossings == -1 & (1:numel(crossings))' > start_idx, 1, 'first') + 1;
+
+% Check if both were found and are within bounds
+if ~isempty(start_idx) && ~isempty(end_idx) && ...
+   start_idx <= length(freq_oscillatory) && end_idx <= length(freq_oscillatory)
+
+    f_start = freq_oscillatory(start_idx);
+    f_end = freq_oscillatory(end_idx);
+    alpha_peak_width = f_end - f_start;
+
+    % Plot markers
+    xline(f_start, 'g--', 'LineWidth', 1.5, 'Label', 'Start');
+    xline(f_end, 'r--', 'LineWidth', 1.5, 'Label', 'End');
+
+    fprintf('\nAlpha peak width estimated from log crossing:\n');
+    fprintf('Start: %.2f Hz, End: %.2f Hz, Width: %.2f Hz\n', f_start, f_end, alpha_peak_width);
+else
+    fprintf('\nCould not identify valid start/end of log crossing in alpha band.\n');
+end
+

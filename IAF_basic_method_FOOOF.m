@@ -1,25 +1,16 @@
 clear all;
-addpath('C:\fieldtrip-20240113');
+addpath('C:\fieldtrip-20250106');
+% addpath('C:\fieldtrip-20240113');
 DIR = 'D:\src\11-reref';
 
 FILES = {
-    '20190729_ALYEU_S1.mat';
-    '20190731_ALYEU_S2.mat';
-    '20190812_ALYEU_S3.mat'
+    '20190716_LIGOH_S1.mat';
+    '20190719_LIGOH_S2.mat';
+    '20190724_LIGOH_S3.mat'
 };
 
 oscillatory_data = cell(1, numel(FILES));
 
-% NEWEST_LABELS  = {'Fp1','Fp2','F3','F4','C3','C4','P3','P4',...
-%     'O1','O2','F7','F8','T7','T8','P7','P8',...
-%     'Fz','Cz','Pz','Iz','FC1','FC2','CP1','CP2',...
-%     'FC5','FC6','CP5','CP6','TP9','TP10','AFz','FCz',...
-%     'F1','F2','C1','C2','P1','P2','AF3','AF4',...
-%     'FC3','FC4','CP3','CP4','PO3','PO4','F5','F6',...
-%     'C5','C6','P5','P6','AF7','AF8','FT7','FT8',...
-%     'TP7','TP8','PO7','PO8','Fpz','CPz','POz','Oz',...
-%     'ECG','HEOG','VEOG','Marker'}';
-% 
 for i = 1:numel(FILES)
     filename = fullfile(DIR, FILES{i});
     load(filename, 'reref');
@@ -121,80 +112,26 @@ for i = 1:topN
         i, chan_labels{idx}, alpha_mean_pow(idx), alpha_peak_vals(idx), alpha_peak_freqs(idx));
 end
 
+% Define ±2 Hz around peak alpha frequency of the max channel
+peak_freq = alpha_peak_freqs(max_chan_idx);
+individual_alpha_band = [peak_freq - 2, peak_freq + 2];
 
-% Remove the file extension
-[~, name, ~] = fileparts(FILES{1});
-parts = split(name, '_');
-core_name = parts{2}; 
+% Display IAF band numerically
+fprintf('Individual Alpha Band for %s: %.2f Hz to %.2f Hz\n', ...
+    max_alpha_channel, individual_alpha_band(1), individual_alpha_band(2));
 
+% Find indices of frequencies in this personalized alpha band
+indiv_idx = find(freq_oscillatory >= individual_alpha_band(1) & ...
+                 freq_oscillatory <= individual_alpha_band(2));
+indiv_freqs = freq_oscillatory(indiv_idx);
 
-% Build data structure for topoplot
-topo_data = [];
-topo_data.label = chan_labels;
-topo_data.dimord = 'chan_time';
-topo_data.time = 0;
-topo_data.avg = alpha_mean_pow(:)';  
+indiv_power = pow(max_chan_idx, indiv_idx);
 
-% Load layout
-cfg = [];
-cfg.layout = 'easycapM1.mat';  
-layout = ft_prepare_layout(cfg, topo_data);
-
-% Plot topoplot
-cfg = [];
-cfg.layout = layout;
-cfg.marker = 'on';
-cfg.comment = 'no';
-cfg.colorbar = 'yes';
-cfg.zlim = [0 max(abs(topo_data.avg(:)))] ;  
-cfg.colormap = jet;
-
+% Plot
 figure;
-ft_topoplotER(cfg, topo_data);
-title('Topographical Distribution of Mean Alpha Power (7–13 Hz)');
-
-image_DIR = 'D:/src/IAF_avgs';
-exportgraphics(gcf, fullfile(image_DIR, [core_name '_topo.jpg']), 'ContentType', 'vector');
-
-
-
-
-figure ;
-semilogy(freq_original, mean_original, 'k-', 'LineWidth', 2); hold on;
-semilogy(freq_original, mean_fractal, 'r--', 'LineWidth', 2);
-semilogy(freq_oscillatory, mean_oscillatory, 'b-', 'LineWidth', 2);
-legend({'Original', 'Fractal (Aperiodic)', 'Oscillatory'}, 'Location', 'southwest');
+plot(indiv_freqs, indiv_power, 'LineWidth', 2);
 xlabel('Frequency (Hz)');
 ylabel('Power (\muV^2/Hz)');
-title('Power Spectra');
+title(sprintf('Individual Alpha Band: %s (%.2f ± 2 Hz)', ...
+    max_alpha_channel, peak_freq));
 grid on;
-image_DIR = 'D:/src/IAF_avgs';
-exportgraphics(gcf, fullfile(image_DIR, [core_name '_FOOOF_plot.jpg']), 'ContentType', 'vector');
-
-figure;
-hold on;
-colors = lines(topN);
-for i = 1:topN
-    idx = sorted_idx(i);
-    semilogy(freq_oscillatory, pow(idx, :), ...
-        'LineWidth', 2, 'Color', colors(i, :));
-end
-xlabel('Frequency (Hz)');
-ylabel('Power (\muV^2/Hz)');
-title('Top 5 Channels by Alpha Power');
-legend(chan_labels(sorted_idx(1:topN)), 'Location', 'northeast');
-grid on;
-xticks(1:1:35);
-image_DIR = 'D:/src/IAF_avgs';
-exportgraphics(gcf, fullfile(image_DIR, [core_name '_top_channels_plot.jpg']), 'ContentType', 'vector');
-
-figure;
-bar(alpha_mean_pow(sorted_idx));
-set(gca, 'XTick', 1:nchan, 'XTickLabel', chan_labels(sorted_idx));
-xtickangle(45);
-ylabel('Mean Alpha Power (7–13 Hz)');
-title('Alpha Power by Channel');
-grid on;
-
-image_DIR = 'D:/src/IAF_avgs';
-exportgraphics(gcf, fullfile(image_DIR, [core_name '_power_bar_plot.jpg']), 'ContentType', 'vector');
